@@ -1,0 +1,964 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Утренняя гимнастика — таймер</title>
+<style>
+
+/* Терминальный шрифт: локальная версия, загрузка по сети или системный моноширинный. */
+@font-face {
+  font-family: "Terminus Gym";
+  src: local("Terminus (TTF)"),
+       local("TerminusTTF"),
+       url("https://raw.githubusercontent.com/nicespoon/retro-adsb-radar/main/fonts/TerminusTTF-4.49.3.ttf")
+       format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+
+  /* Общая палитра и оформление страницы в стиле зелёного монитора. */
+  :root {
+    color-scheme: dark;
+    --bg: #000400;
+    --green: #79ff91;
+    --green-dim: #255f31;
+    --green-faint: rgba(121, 255, 145, .13);
+    --green-glow: rgba(82, 255, 112, .55);
+    --panel: rgba(0, 12, 3, .78);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--green);
+    overflow: hidden;
+  }
+
+  body {
+    font-family: "Terminus Gym", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+                 "Liberation Mono", "Courier New", monospace;
+    font-weight: 400;
+    letter-spacing: 0;
+    font-synthesis: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Горизонтальные строки имитируют экран электронно-лучевого монитора. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    pointer-events: none;
+    background:
+      repeating-linear-gradient(
+        to bottom,
+        rgba(255,255,255,.025) 0,
+        rgba(255,255,255,.025) 1px,
+        rgba(0,0,0,.08) 1px,
+        rgba(0,0,0,.08) 4px
+      );
+    mix-blend-mode: screen;
+    opacity: .55;
+  }
+
+  /* Мягкое свечение и затемнение краёв экрана. */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse at center,
+        transparent 48%,
+        rgba(0, 20, 5, .16) 72%,
+        rgba(0,0,0,.55) 100%);
+  }
+
+  button {
+    font: inherit;
+    text-transform: uppercase;
+  }
+
+  /* Основная сетка учитывает вырезы экрана и безопасные отступы телефона. */
+  #app {
+    position: relative;
+    width: min(100%, 760px);
+    height: 100dvh;
+    min-height: 100%;
+    margin: 0 auto;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding:
+      max(28px, env(safe-area-inset-top))
+      max(28px, env(safe-area-inset-right))
+      max(32px, env(safe-area-inset-bottom))
+      max(28px, env(safe-area-inset-left));
+    background:
+      linear-gradient(rgba(0, 18, 5, .14), rgba(0, 5, 1, .05));
+    border-left: 1px solid rgba(121,255,145,.28);
+    border-right: 1px solid rgba(121,255,145,.28);
+    box-shadow:
+      0 0 28px rgba(60,255,90,.06) inset,
+      0 0 34px rgba(60,255,90,.07);
+    text-shadow:
+      0 0 2px var(--green),
+      0 0 8px rgba(82,255,112,.25);
+  }
+
+  #app::before,
+  #app::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    inset: 16px;
+  }
+
+  #app::before {
+    border: 1px solid rgba(121,255,145,.45);
+    box-shadow:
+      0 0 6px rgba(82,255,112,.22),
+      0 0 14px rgba(82,255,112,.12) inset;
+  }
+
+  #app::after {
+    inset: 28px;
+    background:
+      linear-gradient(var(--green),var(--green)) left top/18px 1px no-repeat,
+      linear-gradient(var(--green),var(--green)) left top/1px 18px no-repeat,
+      linear-gradient(var(--green),var(--green)) right top/18px 1px no-repeat,
+      linear-gradient(var(--green),var(--green)) right top/1px 18px no-repeat,
+      linear-gradient(var(--green),var(--green)) left bottom/18px 1px no-repeat,
+      linear-gradient(var(--green),var(--green)) left bottom/1px 18px no-repeat,
+      linear-gradient(var(--green),var(--green)) right bottom/18px 1px no-repeat,
+      linear-gradient(var(--green),var(--green)) right bottom/1px 18px no-repeat;
+    opacity: .72;
+  }
+
+  /* Заголовок упражнения и центральные экраны состояния тренировки. */
+  .header {
+    position: relative;
+    z-index: 2;
+    min-height: 6.8rem;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding: 10px 22px 0;
+  }
+
+  .exercise-number,
+  .approach { display: none; }
+
+  .exercise-name {
+    margin: 0;
+    font-size: clamp(1.15rem, 4.4vw, 2.35rem);
+    line-height: 1.15;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: .035em;
+  }
+
+  .center {
+    position: relative;
+    z-index: 2;
+    min-height: 0;
+    display: grid;
+    place-items: center;
+    padding: 10px 18px;
+  }
+
+  .work-view,
+  .break-view,
+  .ready-view,
+  .finished-view {
+    width: 100%;
+    text-align: center;
+  }
+
+  .rep-label,
+  .pause-label,
+  .pause-seconds { display: none; }
+
+  .rep {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: clamp(11rem, 46vh, 29rem);
+    line-height: .74;
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+    transform: none;
+    text-indent: 0;
+    white-space: nowrap;
+    text-shadow:
+      0 0 2px #baffc4,
+      0 0 7px var(--green),
+      0 0 22px rgba(82,255,112,.38);
+    filter: saturate(.85);
+  }
+
+  .rep.two-digit {
+    transform: translateX(-0.09em);
+  }
+
+  .ready-title,
+  .finished-title {
+    margin: 0 0 clamp(4rem, 14vh, 8rem);
+    padding: 0 10px;
+    font-size: clamp(2.5rem, 9vw, 5.6rem);
+    line-height: 1.08;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: .02em;
+    text-shadow:
+      0 0 2px #baffc4,
+      0 0 8px rgba(82,255,112,.65),
+      0 0 24px rgba(82,255,112,.24);
+  }
+
+  /* Кнопки запуска и управления тренировкой. */
+  .main-button,
+  .control-button {
+    color: var(--green);
+    border: 1px solid var(--green);
+    background: rgba(0, 14, 4, .72);
+    border-radius: 0;
+    cursor: pointer;
+    box-shadow:
+      0 0 5px rgba(82,255,112,.25),
+      0 0 12px rgba(82,255,112,.10) inset;
+    text-shadow:
+      0 0 2px var(--green),
+      0 0 8px rgba(82,255,112,.34);
+    outline: none;
+  }
+
+  .main-button {
+    width: min(78vw, 470px);
+    min-height: 78px;
+    padding: 14px 28px;
+    font-size: clamp(1.35rem, 4vw, 2rem);
+    font-weight: 400;
+  }
+
+  .main-button:active,
+  .control-button:active {
+    background: var(--green);
+    color: #001603;
+    text-shadow: none;
+  }
+
+  /* Сегментная шкала показывает остаток отдыха и ритм движения. */
+  .footer {
+    position: relative;
+    z-index: 2;
+    width: calc(100% - 40px);
+    margin: 0 auto 14px;
+  }
+
+  .bar-shell {
+    width: 100%;
+    min-height: 48px;
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    gap: 5px;
+    padding: 7px;
+    border: 1px solid var(--green);
+    background: rgba(0,10,2,.5);
+    box-shadow:
+      0 0 7px rgba(82,255,112,.2),
+      0 0 10px rgba(82,255,112,.08) inset;
+  }
+
+  .bar-segment {
+    min-width: 0;
+    height: 32px;
+    border: 1px solid rgba(121,255,145,.28);
+    background: rgba(121,255,145,.03);
+    transition: background-color 35ms linear,
+                box-shadow 35ms linear,
+                opacity 35ms linear;
+  }
+
+  .bar-segment.active {
+    border-color: rgba(121,255,145,.85);
+    background: var(--green);
+    box-shadow:
+      0 0 4px var(--green),
+      0 0 9px rgba(82,255,112,.42);
+  }
+
+  .footer-meta { display: none !important; }
+
+  /* Панель навигации появляется поверх таймера во время ручной паузы. */
+  .controls {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    padding:
+      max(28px, env(safe-area-inset-top))
+      max(28px, env(safe-area-inset-right))
+      max(28px, env(safe-area-inset-bottom))
+      max(28px, env(safe-area-inset-left));
+    background: rgba(0, 8, 2, .68);
+    backdrop-filter: blur(1.3px);
+    -webkit-backdrop-filter: blur(1.3px);
+  }
+
+  .controls-row {
+    width: min(80vw, 460px);
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 14px;
+    border: 1px solid rgba(121,255,145,.5);
+    background: rgba(0, 12, 3, .86);
+    box-shadow:
+      0 0 14px rgba(82,255,112,.12),
+      0 0 22px rgba(82,255,112,.08) inset;
+  }
+
+  .control-button {
+    width: 100%;
+    min-height: 66px;
+    padding: 10px 16px;
+    font-size: clamp(1.05rem, 3.8vw, 1.55rem);
+    font-weight: 400;
+  }
+
+  .control-button.primary {
+    background: var(--green);
+    color: #001603;
+    border-color: var(--green);
+    text-shadow: none;
+    box-shadow:
+      0 0 6px var(--green),
+      0 0 18px rgba(82,255,112,.45);
+  }
+
+  .control-button:disabled {
+    opacity: .22;
+    cursor: default;
+  }
+
+  .hidden { display: none !important; }
+
+  /* Компактная раскладка для узких и невысоких экранов. */
+  @media (max-width: 520px) {
+    #app {
+      border-left: 0;
+      border-right: 0;
+      padding-left: 20px;
+      padding-right: 20px;
+    }
+
+    #app::before { inset: 9px; }
+    #app::after { inset: 20px; }
+
+    .header {
+      min-height: 6rem;
+      padding-left: 14px;
+      padding-right: 14px;
+    }
+
+    .footer {
+      width: calc(100% - 22px);
+      margin-bottom: 4px;
+    }
+
+    .bar-shell {
+      min-height: 42px;
+      gap: 3px;
+      padding: 6px;
+    }
+
+    .bar-segment { height: 28px; }
+  }
+
+  @media (max-height: 650px) {
+    #app {
+      padding-top: 16px;
+      padding-bottom: 16px;
+    }
+
+    .header { min-height: 4.6rem; }
+    .exercise-name { font-size: clamp(1rem, 4vw, 1.7rem); }
+    .rep { font-size: clamp(8rem, 38vh, 17rem); }
+
+    .ready-title,
+    .finished-title {
+      margin-bottom: 2rem;
+      font-size: clamp(2rem, 8vw, 4rem);
+    }
+
+    .main-button { min-height: 60px; }
+    .control-button { min-height: 54px; }
+    .bar-segment { height: 22px; }
+    .bar-shell { min-height: 36px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bar-segment { transition: none; }
+  }
+
+</style>
+</head>
+<body>
+<main id="app" aria-live="polite">
+  <header class="header">
+    <div id="exerciseNumber" class="exercise-number"></div>
+    <div id="exerciseName" class="exercise-name"></div>
+    <div id="approach" class="approach"></div>
+  </header>
+
+  <section class="center">
+    <div id="readyView" class="ready-view">
+      <div class="ready-title">УТРЕННЯЯ ГИМНАСТИКА</div>
+      <button id="startButton" class="main-button" type="button">СТАРТ</button>
+    </div>
+
+    <div id="workView" class="work-view hidden">
+      <div id="rep" class="rep">1</div>
+    </div>
+
+    <div id="breakView" class="break-view hidden">
+      <div id="pauseLabel" class="pause-label">Пауза</div>
+      <div id="pauseSeconds" class="pause-seconds">20</div>
+    </div>
+
+    <div id="finishedView" class="finished-view hidden">
+      <div class="finished-title">ГОТОВО</div>
+      <button id="restartButton" class="main-button" type="button">СНАЧАЛА</button>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div id="barShell" class="bar-shell hidden" aria-hidden="true">
+      <div id="bar" class="bar hidden"></div>
+    </div>
+    <div id="footerMeta" class="footer-meta hidden">
+      <span id="stageInfo"></span>
+      <span id="programInfo"></span>
+    </div>
+  </footer>
+</main>
+
+<div id="controls" class="controls hidden">
+  <div class="controls-row">
+    <button id="backButton" class="control-button" type="button">← НАЗАД</button>
+    <button id="continueButton" class="control-button primary" type="button">ПРОДОЛЖИТЬ</button>
+    <button id="forwardButton" class="control-button" type="button">ВПЕРЁД →</button>
+  </div>
+</div>
+
+<script>
+// Изолируем состояние таймера и обработчики от глобальной области страницы.
+(() => {
+  "use strict";
+
+  // Программа: число подходов, повторений и длительность повторения и пульса в мс.
+  const exercises = [
+    { name: "Руки вперёд", approaches: 3, reps: 10, repMs: 2500, pulseMs: 2500 },
+    { name: "Руки в стороны", approaches: 3, reps: 10, repMs: 2500, pulseMs: 2500 },
+    { name: "Руки согнуты в локтях", approaches: 3, reps: 10, repMs: 2500, pulseMs: 2500 },
+    { name: "Разведение в стороны", approaches: 3, reps: 10, repMs: 2500, pulseMs: 2500 },
+    { name: "Приседания", approaches: 3, reps: 10, repMs: 2500, pulseMs: 2500 },
+    { name: "Наклоны", approaches: 1, reps: 10, repMs: 8000, pulseMs: 2000 }
+  ];
+
+  // Отдельные интервалы подготовки, отдыха между подходами и упражнениями.
+  const INITIAL_BREAK_MS = 20000;
+  const BETWEEN_APPROACHES_MS = 15000;
+  const BETWEEN_EXERCISES_MS = 20000;
+
+  // Разворачиваем упражнения в последовательность всех подходов тренировки.
+  const approaches = [];
+  exercises.forEach((exercise, exerciseIndex) => {
+    for (let n = 1; n <= exercise.approaches; n++) {
+      approaches.push({
+        exerciseIndex,
+        approachNumber: n,
+        reps: exercise.reps,
+        repMs: exercise.repMs,
+        pulseMs: exercise.pulseMs,
+        durationMs: exercise.reps * exercise.repMs
+      });
+    }
+  });
+
+  // Находим элемент интерфейса по его идентификатору.
+  const $ = id => document.getElementById(id);
+
+  // Сохраняем ссылки на элементы, чтобы не искать их на каждом кадре.
+  const el = {
+    exerciseNumber: $("exerciseNumber"),
+    exerciseName: $("exerciseName"),
+    approach: $("approach"),
+    readyView: $("readyView"),
+    workView: $("workView"),
+    breakView: $("breakView"),
+    finishedView: $("finishedView"),
+    rep: $("rep"),
+    pauseLabel: $("pauseLabel"),
+    pauseSeconds: $("pauseSeconds"),
+    startButton: $("startButton"),
+    restartButton: $("restartButton"),
+    barShell: $("barShell"),
+    bar: $("bar"),
+    footerMeta: $("footerMeta"),
+    stageInfo: $("stageInfo"),
+    programInfo: $("programInfo"),
+    controls: $("controls"),
+    backButton: $("backButton"),
+    continueButton: $("continueButton"),
+    forwardButton: $("forwardButton")
+  };
+
+  // Один раз создаём сегменты шкалы, затем меняем только их подсветку.
+  const BAR_SEGMENTS = 24;
+  const barSegments = [];
+  for (let i = 0; i < BAR_SEGMENTS; i++) {
+    const segment = document.createElement("div");
+    segment.className = "bar-segment";
+    el.barShell.appendChild(segment);
+    barSegments.push(segment);
+  }
+
+  // Состояние программы: ожидание (ready), тренировка (active), завершение (finished).
+  let state = "ready";
+  let running = false;
+  // Текущий этап хранит тип отдыха/работы, индекс подхода и длительность.
+  let stage = null;
+  let elapsedMs = 0;
+  let stageStartedAt = 0;
+  let rafId = null;
+  let manuallyJumped = false;
+
+  // Возвращаем подход, ограничивая индекс границами программы.
+  function approachAt(index) {
+    return approaches[Math.max(0, Math.min(index, approaches.length - 1))];
+  }
+
+  // Находим упражнение, которому принадлежит подход.
+  function exerciseForApproach(index) {
+    return exercises[approachAt(index).exerciseIndex];
+  }
+
+  // Показываем номер и название упражнения вместе с номером подхода.
+  function setHeader(index) {
+    const a = approachAt(index);
+    const ex = exercises[a.exerciseIndex];
+    el.exerciseNumber.textContent = "";
+    el.exerciseName.textContent = `${a.exerciseIndex + 1}. ${ex.name} ${a.approachNumber}/${ex.approaches}`;
+    el.approach.textContent = "";
+  }
+
+  // Оставляем видимым только нужный центральный экран.
+  function showOnly(view) {
+    [el.readyView, el.workView, el.breakView, el.finishedView].forEach(v => v.classList.add("hidden"));
+    view.classList.remove("hidden");
+  }
+
+  // Преобразуем долю заполнения в число подсвеченных сегментов.
+  function setBar(fraction) {
+    const x = Math.max(0, Math.min(1, fraction));
+    const active = Math.round(x * BAR_SEGMENTS);
+    for (let i = 0; i < barSegments.length; i++) {
+      barSegments[i].classList.toggle("active", i < active);
+    }
+  }
+
+  // За цикл равномерно заполняем шкалу и опустошаем её для подсказки ритма.
+  function trianglePulse(timeInCycle, cycleMs) {
+    const p = (timeInCycle % cycleMs) / cycleMs;
+    return 1 - Math.abs(2 * p - 1);
+  }
+
+  // Выбираем длительность отдыха перед заданным подходом.
+  function breakBefore(index, isInitial = false) {
+    if (isInitial) {
+      return { durationMs: INITIAL_BREAK_MS, breakKind: "Перед началом" };
+    }
+    const prev = approaches[index - 1];
+    const next = approaches[index];
+    const sameExercise = prev.exerciseIndex === next.exerciseIndex;
+    return {
+      durationMs: sameExercise ? BETWEEN_APPROACHES_MS : BETWEEN_EXERCISES_MS,
+      breakKind: sameExercise ? "Пауза между подходами" : "Пауза между упражнениями"
+    };
+  }
+
+  // Создаём этап отдыха перед следующим подходом.
+  function makeBreak(index, isInitial = false) {
+    const b = breakBefore(index, isInitial);
+    return {
+      type: "break",
+      approachIndex: index,
+      durationMs: b.durationMs,
+      breakKind: b.breakKind
+    };
+  }
+
+  // Создаём рабочий этап на полную длительность подхода.
+  function makeWork(index) {
+    const a = approachAt(index);
+    return {
+      type: "work",
+      approachIndex: index,
+      durationMs: a.durationMs
+    };
+  }
+
+  // Устанавливаем этап и при необходимости запускаем отсчёт с нужной позиции.
+  function beginStage(newStage, initialElapsed = 0, shouldRun = true) {
+    stage = newStage;
+    elapsedMs = initialElapsed;
+    running = shouldRun;
+    state = "active";
+    manuallyJumped = false;
+    if (running) stageStartedAt = performance.now() - elapsedMs;
+    render();
+    if (running) ensureLoop();
+  }
+
+  // Запоминаем блокировку сна экрана и необходимость восстановить её при возврате.
+  let wakeLock = null;
+  let wakeLockArmed = false;
+
+  // Просим браузер не выключать экран, если страница видима и API доступен.
+  async function requestWakeLock() {
+    wakeLockArmed = true;
+    if (!("wakeLock" in navigator) || document.visibilityState !== "visible") return;
+    if (wakeLock && !wakeLock.released) return;
+
+    try {
+      wakeLock = await navigator.wakeLock.request("screen");
+      // Сбрасываем ссылку, когда браузер или система снимают блокировку.
+      wakeLock.addEventListener("release", () => {
+        wakeLock = null;
+      }, { once: true });
+    } catch (err) {
+      // Браузер может отказать из-за контекста, заряда или своих ограничений.
+      // Сам таймер продолжает работать без блокировки сна экрана.
+      wakeLock = null;
+    }
+  }
+
+  // По действию пользователя пробуем развернуть страницу на весь экран.
+  async function enterFullscreen() {
+    if (document.fullscreenElement) return;
+    const root = document.documentElement;
+
+    try {
+      if (root.requestFullscreen) {
+        await root.requestFullscreen({ navigationUI: "hide" });
+      } else if (root.webkitRequestFullscreen) {
+        root.webkitRequestFullscreen();
+      }
+    } catch (err) {
+      // Отказ в полноэкранном режиме не мешает работе таймера.
+    }
+  }
+
+  // При ручной паузе возвращаем обычный режим просмотра страницы.
+  async function leaveFullscreen() {
+    try {
+      if (document.fullscreenElement && document.exitFullscreen) {
+        await document.exitFullscreen();
+      } else if (document.webkitFullscreenElement && document.webkitExitFullscreen) {
+        document.webkitExitFullscreen();
+      }
+    } catch (err) {
+      // Отказ браузера или системы не мешает поставить таймер на паузу.
+    }
+  }
+
+  // При возврате на вкладку снова запрашиваем блокировку сна экрана.
+  document.addEventListener("visibilitychange", () => {
+    if (wakeLockArmed && document.visibilityState === "visible") {
+      requestWakeLock();
+    }
+  });
+
+  // Начинаем тренировку с подготовительного отдыха перед первым подходом.
+  function startProgram() {
+    beginStage(makeBreak(0, true), 0, true);
+  }
+
+  // Останавливаем кадры таймера и показываем завершение программы.
+  function finishProgram() {
+    running = false;
+    state = "finished";
+    stage = null;
+    elapsedMs = 0;
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    render();
+  }
+
+  // Чередуем отдых и работу, сохраняя время, вышедшее за границу этапа.
+  function nextStage(overflowMs = 0, now = performance.now()) {
+    if (!stage) return;
+
+    if (stage.type === "break") {
+      stage = makeWork(stage.approachIndex);
+    } else {
+      const nextIndex = stage.approachIndex + 1;
+      if (nextIndex >= approaches.length) {
+        finishProgram();
+        return;
+      }
+      stage = makeBreak(nextIndex, false);
+    }
+
+    elapsedMs = overflowMs;
+    stageStartedAt = now - elapsedMs;
+  }
+
+  // Сверяем этап с реальным временем, в том числе после задержки кадров.
+  function normalizeStages(now) {
+    if (!running || !stage) return;
+
+    elapsedMs = Math.max(0, now - stageStartedAt);
+
+    // При долгом отсутствии кадров пропускаем все уже истёкшие этапы.
+    while (stage && elapsedMs >= stage.durationMs) {
+      const overflow = elapsedMs - stage.durationMs;
+      nextStage(overflow, now);
+      if (!running || !stage) return;
+    }
+  }
+
+  // Фиксируем прошедшее время и открываем управление тренировкой.
+  function pauseProgram() {
+    if (!running || state !== "active" || !stage) return;
+    const now = performance.now();
+    normalizeStages(now);
+    if (!stage || state !== "active") return;
+    elapsedMs = Math.min(stage.durationMs, Math.max(0, now - stageStartedAt));
+    running = false;
+    manuallyJumped = false;
+    leaveFullscreen();
+    render();
+  }
+
+  // Продолжаем текущий этап без учёта времени, проведённого на ручной паузе.
+  function continueProgram() {
+    if (state !== "active" || !stage || running) return;
+    running = true;
+    stageStartedAt = performance.now() - elapsedMs;
+    manuallyJumped = false;
+    render();
+    ensureLoop();
+  }
+
+  // На паузе выбираем соседний подход с начала, без предварительного отдыха.
+  function jumpApproach(delta) {
+    if (state !== "active" || !stage) return;
+    const target = Math.max(0, Math.min(approaches.length - 1, stage.approachIndex + delta));
+    if (target === stage.approachIndex && delta !== 0) return;
+
+    stage = makeWork(target);
+    elapsedMs = 0;
+    running = false;
+    manuallyJumped = true;
+    render();
+  }
+
+  // После завершения возвращаем начальный экран для нового запуска.
+  function restart() {
+    state = "ready";
+    running = false;
+    stage = null;
+    elapsedMs = 0;
+    manuallyJumped = false;
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    render();
+  }
+
+  // Показываем стартовый экран и скрываем элементы активной тренировки.
+  function renderReady() {
+    el.exerciseNumber.textContent = "";
+    el.exerciseName.textContent = "";
+    el.approach.textContent = "";
+    showOnly(el.readyView);
+    el.barShell.classList.add("hidden");
+    el.footerMeta.classList.add("hidden");
+    el.controls.classList.add("hidden");
+  }
+
+  // Показываем итоговый экран с кнопкой возврата к началу.
+  function renderFinished() {
+    el.exerciseNumber.textContent = "";
+    el.exerciseName.textContent = "";
+    el.approach.textContent = "";
+    showOnly(el.finishedView);
+    el.barShell.classList.add("hidden");
+    el.footerMeta.classList.add("hidden");
+    el.controls.classList.add("hidden");
+  }
+
+  // Обновляем заголовок, повторение, шкалу и доступность кнопок на паузе.
+  function renderActive() {
+    const a = approachAt(stage.approachIndex);
+    const ex = exerciseForApproach(stage.approachIndex);
+
+    setHeader(stage.approachIndex);
+    el.barShell.classList.remove("hidden");
+    el.footerMeta.classList.add("hidden");
+    el.programInfo.textContent = "";
+
+    // Во время отдыха шкала убывает; числовой обратный отсчёт скрыт.
+    if (stage.type === "break") {
+      showOnly(el.breakView);
+      const remaining = Math.max(0, stage.durationMs - elapsedMs);
+      el.pauseLabel.textContent = "";
+      el.pauseSeconds.textContent = "";
+      el.stageInfo.textContent = "";
+      setBar(remaining / stage.durationMs);
+    } else {
+      // Во время работы показываем номер повторения и пульсацию заданного ритма.
+      showOnly(el.workView);
+      const repIndex = Math.min(a.reps, Math.floor(elapsedMs / a.repMs) + 1);
+      el.rep.textContent = String(repIndex);
+      el.rep.classList.toggle("two-digit", repIndex >= 10);
+      el.stageInfo.textContent = "";
+
+      const pulse = trianglePulse(elapsedMs, a.pulseMs);
+      setBar(pulse);
+    }
+
+    // Переключение подходов доступно только при остановленном отсчёте.
+    if (running) {
+      el.controls.classList.add("hidden");
+    } else {
+      el.controls.classList.remove("hidden");
+      el.backButton.disabled = stage.approachIndex <= 0;
+      el.forwardButton.disabled = stage.approachIndex >= approaches.length - 1;
+    }
+  }
+
+  // Выбираем экран по текущему состоянию программы.
+  function render() {
+    if (state === "ready") return renderReady();
+    if (state === "finished") return renderFinished();
+    renderActive();
+  }
+
+  // На каждом кадре актуализируем время, рисуем интерфейс и планируем следующий.
+  function tick(now) {
+    rafId = null;
+    if (!running || state !== "active" || !stage) return;
+    normalizeStages(now);
+    if (running && state === "active" && stage) {
+      render();
+      ensureLoop();
+    }
+  }
+
+  // Поддерживаем не более одного ожидающего кадра анимации.
+  function ensureLoop() {
+    if (rafId === null && running) {
+      rafId = requestAnimationFrame(tick);
+    }
+  }
+
+  // Кнопка старта включает тренировку и запрашивает экранные возможности браузера.
+  el.startButton.addEventListener("click", e => {
+    e.stopPropagation();
+    enterFullscreen();
+    requestWakeLock();
+    startProgram();
+  });
+
+  // Кнопка «Сначала» возвращает к стартовому экрану.
+  el.restartButton.addEventListener("click", e => {
+    e.stopPropagation();
+    restart();
+  });
+
+  // На паузе переходим к предыдущему подходу.
+  el.backButton.addEventListener("click", e => {
+    e.stopPropagation();
+    jumpApproach(-1);
+  });
+
+  // На паузе переходим к следующему подходу.
+  el.forwardButton.addEventListener("click", e => {
+    e.stopPropagation();
+    jumpApproach(1);
+  });
+
+  // Продолжаем отсчёт и повторно запрашиваем полноэкранный режим и блокировку сна.
+  el.continueButton.addEventListener("click", e => {
+    e.stopPropagation();
+    enterFullscreen();
+    requestWakeLock();
+    continueProgram();
+  });
+
+  // Нажатие вне кнопок ставит активную тренировку на паузу.
+  document.addEventListener("click", e => {
+    if (e.target.closest("button")) return;
+    if (running && state === "active") pauseProgram();
+  });
+
+  // С клавиатуры запускаем и приостанавливаем таймер, на паузе листаем подходы.
+  document.addEventListener("keydown", e => {
+    if (state !== "active") {
+      if (state === "ready" && (e.code === "Space" || e.code === "Enter")) {
+        e.preventDefault();
+        enterFullscreen();
+        requestWakeLock();
+        startProgram();
+      }
+      return;
+    }
+
+    if (e.code === "Space") {
+      e.preventDefault();
+      if (running) {
+        pauseProgram();
+      } else {
+        enterFullscreen();
+        requestWakeLock();
+        continueProgram();
+      }
+    } else if (!running && e.code === "ArrowLeft") {
+      e.preventDefault();
+      jumpApproach(-1);
+    } else if (!running && e.code === "ArrowRight") {
+      e.preventDefault();
+      jumpApproach(1);
+    }
+  });
+
+  // Рисуем начальный экран и пробуем предотвратить его автоматическое выключение.
+  render();
+  requestWakeLock();
+})();
+</script>
+</body>
+</html>

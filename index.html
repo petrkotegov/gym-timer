@@ -99,6 +99,8 @@
     min-height: 100%;
     margin: 0 auto;
     display: grid;
+    /* Длинный заголовок и «10» не должны расширять колонку за края экрана. */
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto 1fr auto;
     padding:
       max(28px, env(safe-area-inset-top))
@@ -150,6 +152,7 @@
   .header {
     position: relative;
     z-index: 2;
+    min-width: 0;
     min-height: 6.8rem;
     display: grid;
     place-items: center;
@@ -162,7 +165,7 @@
 
   .exercise-name {
     margin: 0;
-    font-size: clamp(1.15rem, 4.4vw, 2.35rem);
+    font-size: clamp(2.3rem, 8.8vw, 4.7rem);
     line-height: 1.15;
     font-weight: 400;
     text-transform: uppercase;
@@ -172,8 +175,12 @@
   .center {
     position: relative;
     z-index: 2;
+    min-width: 0;
     min-height: 0;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    /* Счётчик учитывает доступную ширину, сохраняя один размер для 1–10. */
+    container-type: inline-size;
     place-items: center;
     padding: 10px 18px;
   }
@@ -197,7 +204,7 @@
     align-items: center;
     justify-content: center;
     text-align: center;
-    font-size: clamp(11rem, 46vh, 29rem);
+    font-size: min(clamp(11rem, 46vh, 29rem), 100cqw);
     line-height: .74;
     font-weight: 400;
     font-variant-numeric: tabular-nums;
@@ -213,7 +220,8 @@
   }
 
   .rep.two-digit {
-    transform: translateX(-0.09em);
+    /* У Terminus слева от «1» больше пустого места: выравниваем видимые цифры. */
+    transform: translateX(-0.04em);
   }
 
   .ready-title,
@@ -399,8 +407,8 @@
     }
 
     .header { min-height: 4.6rem; }
-    .exercise-name { font-size: clamp(1rem, 4vw, 1.7rem); }
-    .rep { font-size: clamp(8rem, 38vh, 17rem); }
+    .exercise-name { font-size: clamp(2rem, 8vw, 3.4rem); }
+    .rep { font-size: min(clamp(8rem, 38vh, 17rem), 100cqw); }
 
     .ready-title,
     .finished-title {
@@ -475,8 +483,8 @@
 
   // Программа: число подходов, повторений и длительность повторения и пульса в мс.
   const exercises = [
-    { name: "Руки вперёд", approaches: 3, reps: 10, repMs: 2500, pulseMs: 2500 },
-    { name: "Руки в стороны", approaches: 3, reps: 10, repMs: 2500, pulseMs: 2500 },
+    { name: "Руки вперёд", approaches: 3, reps: 10, repMs: 3000, pulseMs: 3000 },
+    { name: "Руки в стороны", approaches: 3, reps: 10, repMs: 3000, pulseMs: 3000 },
     { name: "Руки согнуты в локтях", approaches: 3, reps: 10, repMs: 2500, pulseMs: 2500 },
     { name: "Разведение в стороны", approaches: 3, reps: 10, repMs: 2500, pulseMs: 2500 },
     { name: "Приседания", approaches: 3, reps: 10, repMs: 2500, pulseMs: 2500 },
